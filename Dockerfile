@@ -21,4 +21,4 @@ ENV PORT=8080
 
 # Ejecutar la función usando functions-framework
 # La función en main.py se llama 'crud_users'
-CMD exec functions-framework --target=crud_users --port=$PORT --host=0.0.0.0
+CMD exec functions-framework --target=registrosolicitudeseincidencias_R --port=$PORT --host=0.0.0.0
