@@ -8,6 +8,7 @@ from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseUpload
 from google.cloud import storage
+import requests
 
 
 # 🔧 Conexión a MySQL
