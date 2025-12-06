@@ -1,3 +1,4 @@
+import logging
 import functions_framework
 import pymysql
 import json
@@ -43,10 +44,53 @@ LISTADO_PROCEDIMIENTOS = {
 def registrosolicitudeseincidencias_R(request):
     headers = {
         'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Methods': 'GET,POST,PUT',
-        'Access-Control-Allow-Headers': 'Content-Type',
+        'Access-Control-Allow-Methods': 'GET,POST,PUT, OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type/Authorization',
     }
 
+    try:
+        # Obtener el token del header Authorization
+        auth_header = request.headers.get("Authorization")
+        
+        # Log para debugging
+        logging.info(f"Authorization header recibido: {auth_header[:50] if auth_header else 'None'}...")
+        
+        # Validar que el token exista
+        if not auth_header:
+            return (json.dumps({"error": "Token no proporcionado"}), 401, headers)
+        
+        # Preparar headers para la verificación del token
+        token_headers = {
+            "Content-Type": "application/json",
+            "Authorization": auth_header
+        }
+        
+        # Log para debugging
+        logging.info(f"Verificando token en: {API_TOKEN}")
+        logging.info(f"Headers enviados: Authorization={auth_header[:50]}...")
+        
+        # Verificar el token con la API de autenticación
+        try:
+            # Enviar POST sin body (solo headers)
+            response = requests.post(API_TOKEN, headers=token_headers, timeout=10)
+            
+            # Log para debugging
+            logging.info(f"Respuesta de token API: status={response.status_code}, body={response.text[:200]}")
+            
+            if response.status_code != 200:
+                # transformamos json a diccionarios
+                error_response = response.json()
+                if "error" in error_response:
+                    error_msg = error_response["error"]
+                logging.warning(f"Token no autorizado: {error_msg}")
+                return (json.dumps({"error": error_msg}), 401, headers)
+        except requests.exceptions.RequestException as e:
+            # Error de conexión o timeout
+            logging.error(f"Error al verificar token: {str(e)}")
+            return (json.dumps({"error": f"Error al verificar token: {str(e)}"}), 503, headers)
+    except Exception as e:
+        return (json.dumps({"error": str(e)}), 500, headers)
+    
     if request.method == "OPTIONS":
         return ("", 204, headers)
 
