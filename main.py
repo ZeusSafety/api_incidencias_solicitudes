@@ -8,6 +8,7 @@ from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseUpload
 from google.cloud import storage
+import requests
 
 
 # 🔧 Conexión a MySQL
@@ -47,6 +48,8 @@ def registrosolicitudeseincidencias_R(request):
         'Access-Control-Allow-Methods': 'GET,POST,PUT, OPTIONS',
         'Access-Control-Allow-Headers': 'Content-Type/Authorization',
     }
+
+    API_TOKEN = "https://api-verificacion-token-2946605267.us-central1.run.app"
 
     try:
         # Obtener el token del header Authorization
