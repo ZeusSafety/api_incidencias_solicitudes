@@ -48,7 +48,7 @@ def registrosolicitudeseincidencias_R(request):
     headers = {
         'Access-Control-Allow-Origin': '*',
         'Access-Control-Allow-Methods': 'GET,POST,PUT, OPTIONS',
-        'Access-Control-Allow-Headers': 'Content-Type/Authorization',
+        'Access-Control-Allow-Headers': 'Content-Type,Authorization',
     }
 
     try:
@@ -316,7 +316,7 @@ def insertar_solicitudes_incidencias_r(request, headers):
             )
             
             cursor.execute(sql, valores)
-            conn.commit()
+            conn.commit()   
     
         return (json.dumps({'mensaje': 'Solicitud registrada correctamente', 'link_informe': informe_link}), 200, headers)
     
