@@ -108,32 +108,12 @@ def registrosolicitudeseincidencias_R(request):
             # LÓGICA DE DIFERENCIACIÓN
             # -------------------------------------------------------------------
             
-            # Intenta obtener el JSON para la petición de número de solicitud
-            try:
-                request_json = request.get_json(silent=True)
-            except:
-                request_json = None
-            
-            # Caso 1: Petición de Número de Solicitud (Viene como JSON con 'area')
-            if request_json and 'area' in request_json:
-                area = request_json['area']
-                conn = get_connection()
-                try:
-                    # Usamos el área recibida para generar el siguiente número
-                    numero_solicitud = generar_numero_solicitud(area.upper(), conn)
-                    if numero_solicitud:
-                        return (json.dumps({'numeroSolicitud': numero_solicitud}), 200, headers)
-                    else:
-                        return (json.dumps({'error': 'Área no válida para generar número.'}), 400, headers)
-                finally:
-                    conn.close()
-            
-            # Caso 2: Petición de Registro (Viene como form-data, o JSON para Reprogramación)
-            elif request.args.get('accion') == 'reprogramar':
+            # Caso 1: Petición de Número de Solicitud (Viene como JSON con form-data)
+            if request.args.get('accion') == 'reprogramar':
                 return registrar_reprogramacion_r(request, headers)
             else:
-                # Si no es JSON de número ni Reprogramar, asumimos que es el registro completo
-                # NOTA: Debemos asegurar que el frontend envíe 'NUMERO_SOLICITUD' pre-generado
+                # Si no es Reprogramar, asumimos que es el registro completo.
+                # La función 'insertar_solicitudes_incidencias_r' ahora se encarga de generar el número.
                 return insertar_solicitudes_incidencias_r(request, headers)
 
         elif request.method == 'PUT':
@@ -282,22 +262,37 @@ def upload_to_gcs(file):
 
 def insertar_solicitudes_incidencias_r(request, headers):
     conn = get_connection()
-    informe_link = None 
+    informe_link = None    
 
-    # Manejo de la subida de archivos (ahora opcional)
+    # 1. Manejo de la subida de archivos (se mantiene igual)
     informe_file = request.files.get('informe')
     if informe_file and informe_file.filename != '':
-        # Llamamos a la nueva función para subir a Cloud Storage
         informe_link = upload_to_gcs(informe_file)
         if not informe_link:
+            conn.close()
             return (json.dumps({'error': 'Error al subir el archivo a Google Cloud Storage.'}), 500, headers)
 
-    # Obtención de los otros datos del formulario
+    # 2. Obtención de los otros datos del formulario
     data = request.form
+    
+    # Validar que el campo AREA exista en el formulario
+    area = data.get('AREA')
+    if not area:
+        conn.close()
+        return (json.dumps({'error': 'Campo AREA es requerido para registrar la solicitud.'}), 400, headers)
+
+    # 3. GENERAR EL NÚMERO DE SOLICITUD EN EL BACKEND
+    numero_solicitud = generar_numero_solicitud(area.upper(), conn)
+    
+    if not numero_solicitud:
+        conn.close()
+        return (json.dumps({'error': 'Área no válida para generar número de solicitud.'}), 400, headers)
+
+    # Nota: FECHA_CONSULTA será insertada por el timestamp de la DB o manejada en el SP/trigger si es necesario.
+    # En su SQL actual, no la está insertando, lo cual es correcto si la DB pone el valor por defecto/timestamp.
 
     try:
         with conn.cursor() as cursor:
-            # ✅ QUITAR FECHA_CONSULTA de la lista de columnas y valores
             sql = """
                 INSERT INTO solicitudes (
                     REGISTRADO_POR, NUMERO_SOLICITUD, AREA, RES_INCIDENCIA, 
@@ -306,26 +301,27 @@ def insertar_solicitudes_incidencias_r(request, headers):
             """
             valores = (
                 data.get('REGISTRADO_POR'),
-                data.get('NUMERO_SOLICITUD'),
-                data.get('AREA'),
-                data.get('RES_INCIDENCIA'),
-                data.get('REQUERIMIENTOS'),
-                informe_link,  # Usamos el enlace de Cloud Storage
+                numero_solicitud,  
+                area,
+                data.get('RES_INCIDENCIA') if data.get('RES_INCIDENCIA') else None,
+                data.get('REQUERIMIENTOS') if data.get('REQUERIMIENTOS') else None,
+                informe_link,      
                 data.get('AREA_RECEPCION'),
                 data.get('ESTADO')
             )
             
             cursor.execute(sql, valores)
-            conn.commit()   
+            conn.commit()    
     
-        return (json.dumps({'mensaje': 'Solicitud registrada correctamente', 'link_informe': informe_link}), 200, headers)
-    
+        # 4. Devolver la respuesta al frontend, incluyendo el número generado
+        return (json.dumps({'mensaje': 'Solicitud registrada correctamente', 'numeroSolicitud': numero_solicitud, 'link_informe': informe_link}), 200, headers)
+        
     except Exception as e:
         conn.rollback()
+        logging.error(f"Error al insertar en DB: {e}")
         return (json.dumps({'error': f"Error en la base de datos: {e}"}), 500, headers)
     finally:
         conn.close()
-
 
 def actualizar_requerimiento_solicitudes_r(request, headers):
     conn = get_connection()
