@@ -325,7 +325,14 @@ def insertar_solicitudes_incidencias_r(request, headers):
 
 def actualizar_requerimiento_solicitudes_r(request, headers):
     conn = get_connection()
-    data = request.form if request.form else request.get_json(silent=True)
+    
+    # Priorizamos request.form para multipart/form-data (archivos y texto)
+    if request.form:
+        data = request.form
+    elif request.is_json:
+        data = request.get_json()
+    else:
+        data = {}
 
     try:
         id_solicitud = data.get('ID_SOLICITUD')
